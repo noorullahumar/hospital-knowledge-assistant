@@ -1,0 +1,15 @@
+# Secrets
+.env
+
+# Data files
+documents.json
+data/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+hka_env/
+
+# OS
+.DS_Store

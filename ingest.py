@@ -1,94 +1,44 @@
-# Standard library imports
 import os
 import json
-
-# Load environment variables from .env file
-from dotenv import load_dotenv
-
-# LangChain PDF loader for extracting text from PDFs
 from langchain_community.document_loaders import PyPDFLoader
-
-# Text splitter optimized for RAG pipelines
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-
-# Load environment variables (e.g., API keys if needed later)
-load_dotenv()
-
-
-# ========= CONFIG =========
-# Folder containing all source PDF files
+# Configuration: Where PDFs are stored and where the processed JSON is saved
 DATA_FOLDER = "data"
-
-# Output file where processed documents will be saved
 OUTPUT_FILE = "documents.json"
 
-# List of PDF files to ingest into the knowledge base
-PDF_FILES = [
-    "hospital_knowledge.pdf",
-    "medical_records.pdf",
-    # add more PDFs here
-]
-# ==========================
+# Ensure the data directory exists before processing
+if not os.path.exists(DATA_FOLDER):
+    os.makedirs(DATA_FOLDER)
 
-
-def ingest_documents():
+def process_pdf(pdf_path):
     """
-    Loads PDF files, extracts text, splits it into chunks,
-    and saves the result as a safe JSON file for RAG usage.
+    Processes a single PDF by loading text, splitting it into manageable chunks, 
+    and appending it to a central documents.json file.
     """
-    all_docs = []
+    
+    # 1. Load the PDF file using LangChain's PyPDFLoader
+    loader = PyPDFLoader(pdf_path)
+    docs = loader.load()
 
-    # 1️⃣ Load all PDFs
-    for pdf_name in PDF_FILES:
-        # Build full file path
-        pdf_path = os.path.join(DATA_FOLDER, pdf_name)
-
-        # Ensure the PDF exists
-        if not os.path.exists(pdf_path):
-            raise FileNotFoundError(f"❌ Missing file: {pdf_path}")
-
-        # Load PDF using LangChain loader
-        loader = PyPDFLoader(pdf_path)
-        docs = loader.load()
-
-        # Validate extracted text
-        if not docs:
-            raise ValueError(f"❌ No text extracted from {pdf_name}")
-
-        # Accumulate documents from all PDFs
-        all_docs.extend(docs)
-
-    print(f"📄 Loaded {len(all_docs)} pages from PDFs")
-
-    # 🔍 DEBUG (IMPORTANT – remove later)
-    # Shows sample extracted text to verify correctness
-    print("\n--- SAMPLE TEXT ---")
-    print(all_docs[0].page_content[:500])
-    print("-------------------\n")
-
-    # 2️⃣ Split into chunks (RAG-optimized)
-    # Smaller overlapping chunks improve retrieval accuracy
+    # 2. Define the text splitting logic. 
+    # chunk_size: Max characters per chunk.
+    # chunk_overlap: Overlap between chunks to maintain context across splits.
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,            # Max characters per chunk
-        chunk_overlap=150,         # Overlap to preserve context
+        chunk_size=1000,
+        chunk_overlap=200,
         separators=["\n\n", "\n", ".", " ", ""]
     )
+    
+    # Apply the split to the loaded document objects
+    split_docs = splitter.split_documents(docs)
 
-    # Split full documents into smaller chunks
-    split_docs = splitter.split_documents(all_docs)
-
-    if not split_docs:
-        raise ValueError("❌ Text splitting failed")
-
-    print(f"✂️ Split into {len(split_docs)} chunks")
-
-    # 3️⃣ Save SAFE JSON (NO PICKLE)
-    # JSON is portable, secure, and production-friendly
-    safe_docs = [
+    # 3. Format the split chunks into a dictionary format for JSON storage
+    new_entries = [
         {
-            "page_content": doc.page_content,  # Text chunk
+            "page_content": doc.page_content,
             "metadata": {
+                # Save only the filename (not the full path) for cleaner citations
                 "source": os.path.basename(doc.metadata.get("source", "")),
                 "page": doc.metadata.get("page", None)
             }
@@ -96,19 +46,23 @@ def ingest_documents():
         for doc in split_docs
     ]
 
-    # Write processed documents to JSON file
+    # 4. Handle Persistent Storage: Load existing JSON data if it exists
+    existing_docs = []
+    if os.path.exists(OUTPUT_FILE):
+        with open(OUTPUT_FILE, "r", encoding="utf-8") as f:
+            try:
+                existing_docs = json.load(f)
+            except json.JSONDecodeError:
+                # If the file is corrupted or empty, start with an empty list
+                existing_docs = []
+
+    # 5. Append new processed chunks to the existing collection
+    existing_docs.extend(new_entries)
+
+    # 6. Save the updated list back to the JSON file
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        json.dump(
-            safe_docs,
-            f,
-            ensure_ascii=False,
-            indent=2
-        )
+        # indent=2 makes the file human-readable
+        json.dump(existing_docs, f, ensure_ascii=False, indent=2)
 
-    print(f"✅ Ingestion complete")
-    print(f"📦 Saved to {OUTPUT_FILE}")
-
-
-# Entry point for running this file directly
-if __name__ == "__main__":
-    ingest_documents()
+    # Return the count of new chunks added for UI feedback
+    return len(split_docs)

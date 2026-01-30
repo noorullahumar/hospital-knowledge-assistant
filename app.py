@@ -96,7 +96,11 @@ def auth_page():
         with tab_signup:
             new_email = st.text_input("Email", key="s_email")
             new_pwd = st.text_input("Password", type="password", key="s_pwd")
-            new_role = st.selectbox("Role", ["Patient", "Staff", "Admin"])
+            
+            # Remove 'Admin' from this list
+            new_role = st.selectbox("Request Role", ["Patient", "Staff"]) 
+            
+            st.caption("Note: Admin accounts must be provisioned by the IT department.")
             if st.button("Register Account", use_container_width=True):
                 if not new_email or not new_pwd:
                     st.warning("⚠️ All fields are required.")
@@ -114,6 +118,34 @@ def auth_page():
         if st.button("← Back to Home"):
             st.session_state.page = "landing"
             st.rerun()
+
+# --- TEMPORARY ADMIN SETUP TOOL ---
+# Access via: your-app-url/?setup=secretadmin123
+def admin_setup_tool():
+    # 1. Check if the secret key is in the URL
+    is_setup_mode = st.query_params.get("setup") == "secretadmin123"
+    
+    if is_setup_mode:
+        # 2. Safety Check: Only show if NO admin exists in PostgreSQL
+        admin_exists = conn.query("SELECT 1 FROM users WHERE role = 'Admin' LIMIT 1", ttl=0)
+        
+        if admin_exists.empty:
+            st.warning("🛠️ Admin Setup Mode Active")
+            with st.expander("Create Initial Admin Account"):
+                adm_email = st.text_input("Admin Email")
+                adm_pwd = st.text_input("Admin Password", type="password")
+                if st.button("Generate System Admin"):
+                    if add_user(adm_email, adm_pwd, "Admin"):
+                        st.success("Admin created! Refreshing...")
+                        # Clear params to hide the tool immediately
+                        st.query_params.clear()
+                        st.rerun()
+        else:
+            # If an admin exists, hide the tool and clear the URL
+            st.query_params.clear()
+
+# Call the tool in your app
+admin_setup_tool()
 
 def main_app():
     """The core Chat interface, Sidebar management, and Admin tools."""

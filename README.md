@@ -1,193 +1,203 @@
-# 🏥 Hospital Knowledge Assistant
+🏥 Hospital Knowledge Assistant
 
-An **AI-powered Retrieval-Augmented Generation (RAG) web application** that allows patients and hospital staff to ask questions and receive accurate answers **strictly based on hospital documents**.
+A secure AI-powered Hospital Knowledge Assistant built using Retrieval-Augmented Generation (RAG).
+It allows patients, hospital staff, and admins to ask questions and receive accurate answers strictly based on hospital documents.
 
-This project demonstrates **secure, production-aware AI engineering** with a focus on healthcare use cases.
+This project focuses on real-world AI systems, security, and healthcare-safe design.
 
----
+🚀 Live Demo
 
-## 🚀 Live Demo
+👉 Live Application
 
-👉 **[Live Application](https://your-app-link-here.streamlit.app)**
-*(Replace with your deployed URL)*
+(Replace with your deployed Streamlit URL)
 
----
+📌 Key Features
 
-## 📌 Key Features
+🧠 RAG Architecture – Answers generated only from hospital PDFs
 
-* 🧠 **RAG Architecture** – Answers are generated using retrieved hospital documents
-* 🔐 **Secure by Design** – No unsafe pickle deserialization
-* 👤 **Role-Based Querying** – Different behavior for Patients vs Hospital Staff
-* 📚 **Source Citations** – Every answer includes document references
-* 💬 **Chat-Based UI** – Clean, modern Streamlit chat interface
-* ⚡ **Fast & Cached** – Optimized with Streamlit caching
-* 🏥 **Healthcare-Oriented UX** – Professional and easy to use
+🔐 Authentication System – Secure login with bcrypt password hashing
 
----
+👥 Role-Based Access Control
 
-## 🛠️ Tech Stack
+Patient – General information
 
-* **Frontend**: Streamlit
-* **Backend / RAG**: LangChain
-* **Vector Store**: FAISS (in-memory, safe rebuild)
-* **LLM**: OpenAI (GPT-4o-mini)
-* **Embeddings**: OpenAI Embeddings (`text-embedding-3-large`)
-* **Document Loader**: PyPDFLoader
-* **Language**: Python
+Staff – Professional hospital data
 
----
+Admin – Full access + document ingestion
 
-## 🧩 Project Architecture
+💬 Chat-Based Interface – Modern Streamlit chat UI
 
-```
-PDF Documents
+🗂️ Multi-Session Chat History – Persistent conversations per user
+
+📚 Source-Grounded Answers – No hallucinated responses
+
+⚡ Fast & Cached – Optimized using Streamlit caching
+
+🎨 Healthcare UI – Custom CSS with hospital-themed design
+
+🛠️ Tech Stack
+
+Frontend: Streamlit
+
+Backend / RAG: LangChain
+
+Vector Store: FAISS (in-memory, safe rebuild)
+
+LLM: OpenAI (GPT-4o-mini)
+
+Embeddings: OpenAI Embeddings
+
+Database: SQLite
+
+Authentication: bcrypt
+
+Document Loader: PyPDFLoader
+
+Language: Python
+
+🧩 Project Architecture
+Hospital PDFs
       ↓
-Document Loader (PyPDFLoader)
+PyPDFLoader
       ↓
 Text Splitter
       ↓
+JSON Storage (documents.json)
+      ↓
 Embeddings (OpenAI)
       ↓
-FAISS Vector Store (in memory)
+FAISS Vector Store (In-Memory)
       ↓
-Retriever
+Retriever (k=3)
       ↓
-LLM (GPT-4o-mini)
+GPT-4o-mini
+      ↓
+Role-Based Prompt Guard
       ↓
 Streamlit Chat UI
-```
 
----
-
-## 📂 Project Structure
-
-```
+📂 Project Structure
 hospital-knowledge-assistant/
 │
-├── app.py              # Streamlit UI
-├── ingest.py           # Document ingestion pipeline
+├── app.py              # Streamlit UI + routing + auth
+├── ingest.py           # PDF ingestion & chunking
 ├── rag_pipeline.py     # RAG + FAISS logic
+├── database.py         # SQLite auth & chat history
+├── style.py            # Custom Streamlit CSS
 ├── requirements.txt
 ├── README.md
-├── data/               # PDF documents (ignored in git)
-├── documents.json      # Processed chunks (ignored in git)
-└── .env                # API keys (ignored in git)
-```
+│
+├── data/               # Hospital PDFs (gitignored)
+├── documents.json      # Processed chunks (gitignored)
+├── hospital_users.db   # SQLite DB (gitignored)
+└── .env                # API keys (gitignored)
 
----
-
-## ⚙️ Setup & Installation
-
-### 1️⃣ Clone the Repository
-
-```bash
+⚙️ Setup & Installation
+1️⃣ Clone Repository
 git clone https://github.com/your-username/hospital-knowledge-assistant.git
 cd hospital-knowledge-assistant
-```
 
-### 2️⃣ Create Virtual Environment
-
-```bash
+2️⃣ Create Virtual Environment
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-```
+source venv/bin/activate     # Windows: venv\Scripts\activate
 
-### 3️⃣ Install Dependencies
-
-```bash
+3️⃣ Install Dependencies
 pip install -r requirements.txt
-```
 
-### 4️⃣ Environment Variables
+4️⃣ Environment Variables
 
-Create a `.env` file:
+Create a .env file:
 
-```env
 OPENAI_API_KEY=your_openai_api_key
-```
 
----
+📥 Ingest Hospital Documents (Admin)
+Option 1: Upload via Admin Dashboard
 
-## 📥 Ingest Documents
+Login as Admin
 
-Place your hospital PDFs inside the `data/` folder and run:
+Upload PDF from sidebar
 
-```bash
+Click Index Knowledge
+
+Option 2: CLI Ingestion
 python ingest.py
-```
+
 
 This will:
 
-* Load PDFs
-* Split them into chunks
-* Save them safely to `documents.json`
+Load hospital PDFs
 
----
+Split them into chunks
 
-## ▶️ Run the Application
+Store them safely in documents.json
 
-```bash
+▶️ Run the Application
 streamlit run app.py
-```
 
-Open your browser at:
 
-```
+Open in browser:
+
 http://localhost:8501
-```
 
----
+🧪 Example Questions
 
-## 🧪 Example Questions
+“What are the hospital visiting hours?”
 
-* "What are the hospital visiting hours?"
-* "What documents are required for patient admission?"
-* "Explain the emergency room procedure"
+“What documents are required for patient admission?”
 
----
+“Explain emergency room procedures”
 
-## 🔐 Security Considerations
+“What is the OPD workflow?”
 
-* ❌ No pickle-based FAISS loading
-* ✅ Safe JSON-based document storage
-* ✅ In-memory FAISS rebuild
-* 🚫 `.env`, PDFs, and documents.json are excluded from GitHub
+🐳 Docker Support
+Build Image
+docker build -t hospital-ai .
 
----
+Run Container
+docker run -p 8501:8501 --env-file .env hospital-ai
 
-## ⚠️ Medical Disclaimer
+🔐 Security Considerations
 
-> This application provides informational responses based on hospital documents only.
-> It is **not a substitute for professional medical advice, diagnosis, or treatment**.
+❌ No pickle-based FAISS loading
 
----
+✅ bcrypt password hashing
 
-## 🌱 Future Enhancements
+✅ Role-based prompt protection
 
-* 🔐 User authentication (Doctor / Nurse / Admin)
-* 🏥 Department-based retrieval (OPD, ICU, Pharmacy)
-* 📊 Answer confidence scoring
-* 🧾 Downloadable reports
-* 🐳 Docker & cloud deployment
+✅ JSON-based document storage
 
----
+✅ In-memory FAISS rebuild only
 
-## 👤 Author
+🚫 .env, PDFs, DB, and documents.json excluded from GitHub
 
-**Your Name**
-IT / Cybersecurity / AI Enthusiast
+⚠️ Medical Disclaimer
 
-* GitHub: [https://github.com/your-username](https://github.com/your-username)
-* Portfolio: [https://your-portfolio-site.com](https://your-portfolio-site.com)
+This application provides informational responses based only on hospital documents.
+It is not a substitute for professional medical advice, diagnosis, or treatment.
 
----
+🌱 Future Enhancements
 
-## ⭐ If You Like This Project
+🔐 JWT / OAuth authentication
 
-Give it a ⭐ on GitHub — it really helps!
+🏥 Department-based retrieval (OPD, ICU, Pharmacy)
 
----
+📊 Answer confidence scoring
 
-## 🏁 Final Note
+🧾 Export chat reports (PDF)
 
-This project showcases **real-world RAG implementation**, secure AI practices, and healthcare-focused design — making it ideal for portfolios, demos, and academic or professional review.
+☁️ Cloud vector databases
+
+🐳 Full Docker Compose deployment
+
+👤 Author
+
+Your Name
+IT | Cybersecurity | AI Enthusiast
+
+GitHub: https://github.com/your-username
+
+Portfolio: https://your-portfolio-site.com
+
+⭐ Support the Project
+
+If you like this project, give it a ⭐ — it really helps!

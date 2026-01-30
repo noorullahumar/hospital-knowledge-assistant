@@ -98,18 +98,26 @@ def clear_chat_history(username):
     conn.close()
 
 # --- AUTHENTICATION ---
-
 def add_user(username, password, role):
     """
-    Registers a new user. 
-    Passwords are 'salted' and 'hashed' using bcrypt for security—we never store plain text.
+    Registers a new user with hard-coded role security.
+    Even if 'Admin' is passed, it defaults to 'Patient'.
     """
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
+    
+    # --- HARD SECURITY OVERRIDE ---
+    # Only allow these roles to be created via the UI. 
+    # If anything else (like 'Admin') is sent, force it to 'Patient'.
+    allowed_public_roles = ["Patient", "Staff"]
+    final_role = role if role in allowed_public_roles else "Patient"
+    
     try:
         # Generate a secure hash of the password
         hashed_pw = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        c.execute("INSERT INTO users VALUES (?, ?, ?)", (username, hashed_pw, role))
+        
+        # Insert using the validated final_role
+        c.execute("INSERT INTO users VALUES (?, ?, ?)", (username, hashed_pw, final_role))
         conn.commit()
         return True
     except sqlite3.IntegrityError:

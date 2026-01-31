@@ -1,203 +1,149 @@
-🏥 Hospital Knowledge Assistant
+# 🏥 Hospital Knowledge Assistant
 
-A secure AI-powered Hospital Knowledge Assistant built using Retrieval-Augmented Generation (RAG).
-It allows patients, hospital staff, and admins to ask questions and receive accurate answers strictly based on hospital documents.
+An **AI-powered Retrieval-Augmented Generation (RAG) web application** that allows patients and hospital staff to ask questions and receive accurate answers **strictly based on hospital documents**.
 
-This project focuses on real-world AI systems, security, and healthcare-safe design.
+This project demonstrates **secure, production-aware AI engineering** with a focus on healthcare use cases, ensuring that AI responses are grounded in fact and access is controlled by user roles.
 
-🚀 Live Demo
+---
 
-👉 Live Application
+## 🚀 Live Demo
 
-(Replace with your deployed Streamlit URL)
+👉 **[Access the Live Application](https://hospital-knowledge-assistant-1.streamlit.app/)**
 
-📌 Key Features
+---
 
-🧠 RAG Architecture – Answers generated only from hospital PDFs
+## 📌 Key Features
 
-🔐 Authentication System – Secure login with bcrypt password hashing
+* 🧠 **RAG Architecture** – Answers generated using context retrieved from official hospital PDFs.
+* 🔐 **Secure Authentication** – User login and registration powered by **bcrypt** password hashing.
+* 👤 **Role-Based Access Control** – Tailored AI behavior for **Patients**, **Staff**, and **Admins**.
+* 🛠️ **Secret Admin Tool** – Hidden setup route via URL parameters to provision the first system admin.
+* 📚 **Source Citations** – Every answer includes references to the specific document and page used.
+* 💬 **Chat-Based UI** – Clean, modern Streamlit interface with persistent session history.
+* ⚡ **Fast & Cached** – Optimized performance using Streamlit resource caching.
+* 🏥 **Healthcare-Oriented UX** – Custom professional CSS designed for medical environments.
 
-👥 Role-Based Access Control
+---
 
-Patient – General information
+## 🛠️ Tech Stack
 
-Staff – Professional hospital data
+* **Frontend**: [Streamlit](https://streamlit.io/)
+* **Backend / RAG**: [LangChain](https://www.langchain.com/)
+* **Vector Store**: [FAISS](https://github.com/facebookresearch/faiss) (In-memory, safe rebuild from JSON)
+* **LLM**: OpenAI (**GPT-4o-mini**)
+* **Embeddings**: OpenAI Embeddings (**text-embedding-3-small/large**)
+* **Database**: SQLite (User Auth & Chat History)
+* **Document Loader**: PyPDFLoader
+* **Language**: Python 3.9+
 
-Admin – Full access + document ingestion
+---
 
-💬 Chat-Based Interface – Modern Streamlit chat UI
+## 🧩 Project Architecture
 
-🗂️ Multi-Session Chat History – Persistent conversations per user
 
-📚 Source-Grounded Answers – No hallucinated responses
 
-⚡ Fast & Cached – Optimized using Streamlit caching
+1.  **PDF Documents** → Loaded via `PyPDFLoader`.
+2.  **Text Splitter** → Chunks documents into manageable pieces for the AI.
+3.  **Embeddings** → OpenAI converts text chunks into vector representations.
+4.  **FAISS Vector Store** → Stores embeddings in-memory for lightning-fast similarity search.
+5.  **Role-Based Prompt Guard** → Injects user role constraints before querying the LLM.
+6.  **GPT-4o-mini** → Generates the final answer based only on retrieved context.
 
-🎨 Healthcare UI – Custom CSS with hospital-themed design
+---
 
-🛠️ Tech Stack
+## 📂 Project Structure
 
-Frontend: Streamlit
-
-Backend / RAG: LangChain
-
-Vector Store: FAISS (in-memory, safe rebuild)
-
-LLM: OpenAI (GPT-4o-mini)
-
-Embeddings: OpenAI Embeddings
-
-Database: SQLite
-
-Authentication: bcrypt
-
-Document Loader: PyPDFLoader
-
-Language: Python
-
-🧩 Project Architecture
-Hospital PDFs
-      ↓
-PyPDFLoader
-      ↓
-Text Splitter
-      ↓
-JSON Storage (documents.json)
-      ↓
-Embeddings (OpenAI)
-      ↓
-FAISS Vector Store (In-Memory)
-      ↓
-Retriever (k=3)
-      ↓
-GPT-4o-mini
-      ↓
-Role-Based Prompt Guard
-      ↓
-Streamlit Chat UI
-
-📂 Project Structure
+```text
 hospital-knowledge-assistant/
 │
-├── app.py              # Streamlit UI + routing + auth
-├── ingest.py           # PDF ingestion & chunking
-├── rag_pipeline.py     # RAG + FAISS logic
-├── database.py         # SQLite auth & chat history
-├── style.py            # Custom Streamlit CSS
-├── requirements.txt
-├── README.md
-│
-├── data/               # Hospital PDFs (gitignored)
-├── documents.json      # Processed chunks (gitignored)
-├── hospital_users.db   # SQLite DB (gitignored)
-└── .env                # API keys (gitignored)
+├── app.py              # Main Application (UI, Routing, Admin Tool)
+├── ingest.py           # Document ingestion & chunking pipeline
+├── rag_pipeline.py     # RAG logic, FAISS indexing & role-based querying
+├── database.py         # SQLite logic for auth and chat history
+├── style.py            # Custom CSS for healthcare branding
+├── requirements.txt    # Project dependencies
+├── data/               # Source PDF documents (Gitignored)
+├── documents.json      # Processed document chunks (Gitignored)
+├── hospital_users.db   # SQLite database file (Gitignored)
+└── .env                # API keys and secrets (Gitignored)
 
+---
 ⚙️ Setup & Installation
-1️⃣ Clone Repository
-git clone https://github.com/your-username/hospital-knowledge-assistant.git
+1️⃣ Clone the Repository
+
+---Bash---
+git clone [https://github.com/noorullahumar/hospital-knowledge-assistant.git](https://github.com/noorullahumar/hospital-knowledge-assistant.git)
 cd hospital-knowledge-assistant
 
 2️⃣ Create Virtual Environment
+
+---Bash---
+# Create the environment
 python -m venv venv
-source venv/bin/activate     # Windows: venv\Scripts\activate
+
+# Activate (macOS/Linux)
+source venv/bin/activate
+
+# Activate (Windows)
+# venv\Scripts\activate
 
 3️⃣ Install Dependencies
+
+---Bash---
 pip install -r requirements.txt
-
 4️⃣ Environment Variables
+Create a .env file in the root directory:
 
-Create a .env file:
+Paste this inside the .env file
+OPENAI_API_KEY=your_actual_openai_api_key
 
-OPENAI_API_KEY=your_openai_api_key
+---
+📥 Ingestion & Admin Setup
+1. Initial Admin Creation:
+Run the app and navigate to the setup URL using the secret key defined in your .env file: http://localhost:8501/?setup=YOUR_SECRET_ADMIN_KEY
 
-📥 Ingest Hospital Documents (Admin)
-Option 1: Upload via Admin Dashboard
 
-Login as Admin
+2. Ingesting Documents
+Log in as an Admin.
 
-Upload PDF from sidebar
+Use the sidebar to upload PDFs and click "Index Knowledge".
 
-Click Index Knowledge
+Alternatively, run the ingestion script via CLI:
 
-Option 2: CLI Ingestion
+---Bash---
 python ingest.py
 
-
-This will:
-
-Load hospital PDFs
-
-Split them into chunks
-
-Store them safely in documents.json
-
 ▶️ Run the Application
+
+---Bash---
 streamlit run app.py
+Open your browser at: http://localhost:8501
 
 
-Open in browser:
+---
 
-http://localhost:8501
-
-🧪 Example Questions
-
-“What are the hospital visiting hours?”
-
-“What documents are required for patient admission?”
-
-“Explain emergency room procedures”
-
-“What is the OPD workflow?”
-
-🐳 Docker Support
-Build Image
-docker build -t hospital-ai .
-
-Run Container
-docker run -p 8501:8501 --env-file .env hospital-ai
 
 🔐 Security Considerations
+✅ No Pickle Loading: FAISS is rebuilt from safe JSON chunks to prevent remote code execution.
 
-❌ No pickle-based FAISS loading
+✅ Password Hashing: User credentials are encrypted using bcrypt.
 
-✅ bcrypt password hashing
+✅ Identity Guarding: Role-based instructions are hard-coded into the AI prompt to prevent data leakage.
 
-✅ Role-based prompt protection
 
-✅ JSON-based document storage
-
-✅ In-memory FAISS rebuild only
-
-🚫 .env, PDFs, DB, and documents.json excluded from GitHub
-
+---
 ⚠️ Medical Disclaimer
+This application provides informational responses based on hospital documents only. It is not a substitute for professional medical advice, diagnosis, or treatment.
 
-This application provides informational responses based only on hospital documents.
-It is not a substitute for professional medical advice, diagnosis, or treatment.
 
-🌱 Future Enhancements
-
-🔐 JWT / OAuth authentication
-
-🏥 Department-based retrieval (OPD, ICU, Pharmacy)
-
-📊 Answer confidence scoring
-
-🧾 Export chat reports (PDF)
-
-☁️ Cloud vector databases
-
-🐳 Full Docker Compose deployment
+---
 
 👤 Author
+Noor Ullah Umar IT / Cybersecurity / AI Enthusiast
 
-Your Name
-IT | Cybersecurity | AI Enthusiast
+GitHub: github.com/noorullahumar
 
-GitHub: https://github.com/your-username
-
-Portfolio: https://your-portfolio-site.com
+Portfolio: your-portfolio-site.com
 
 ⭐ Support the Project
-
-If you like this project, give it a ⭐ — it really helps!
+If you found this project useful, please give it a ⭐ on GitHub — it helps others find the work!

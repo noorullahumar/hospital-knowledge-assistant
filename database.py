@@ -2,59 +2,58 @@ import sqlite3
 import bcrypt
 import uuid
 
-# Configuration: The name of the SQLite database file
+# Configuration: Standardize database file name
 DB_NAME = "hospital_users.db"
 
 def init_db():
-    """
-    Initializes the database by creating the necessary tables if they don't exist.
-    'users' table: Stores credentials and access levels.
-    'chat_history' table: Stores messages linked by session_id and username.
-    """
+    """Initializes the database and ensures all tables/columns exist."""
     conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
+    cursor = conn.cursor()
     
-    # Create table for user accounts
-    c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, role TEXT)')
+    # 1. Users Table (Uses 'email' as primary identifier)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            email TEXT PRIMARY KEY,
+            password TEXT,
+            role TEXT
+        )
+    """)
     
-    # Create table for messages; session_id allows grouping messages into specific conversations
-    c.execute('''CREATE TABLE IF NOT EXISTS chat_history 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  session_id TEXT, 
-                  username TEXT, 
-                  role TEXT, 
-                  content TEXT, 
-                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    # 2. Chat History Table (Uses 'user_email' as the reference)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS chat_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT,
+            user_email TEXT,
+            role TEXT,
+            content TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     conn.commit()
     conn.close()
 
 # --- SESSION MANAGEMENT ---
 
-def create_new_session(username):
-    """
-    Generates a unique 8-character string to identify a specific conversation thread.
-    Uses UUID for uniqueness.
-    """
+def create_new_session(user_email):
+    """Generates a unique 8-character string for a conversation thread."""
     return str(uuid.uuid4())[:8]
 
-def get_user_sessions(username):
-    """
-    Retrieves a list of all unique session IDs belonging to a specific user.
-    Ordered by the most recent message first.
-    """
+def get_user_sessions(user_email):
+    """Retrieves list of session IDs belonging to a user."""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    # DISTINCT ensures we don't get duplicate IDs for every message in a chat
-    c.execute("SELECT DISTINCT session_id FROM chat_history WHERE username = ? ORDER BY timestamp DESC", (username,))
+    # Corrected: Query uses user_email column
+    c.execute("""
+        SELECT DISTINCT session_id FROM chat_history 
+        WHERE user_email = ? ORDER BY timestamp DESC
+    """, (user_email,))
     sessions = [row[0] for row in c.fetchall() if row[0] is not None]
     conn.close()
     return sessions
 
 def delete_session(session_id):
-    """
-    Removes all messages associated with a specific session ID.
-    Used for the '🗑️' button in the sidebar.
-    """
+    """Deletes all messages for a specific session ID."""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("DELETE FROM chat_history WHERE session_id = ?", (session_id,))
@@ -63,81 +62,103 @@ def delete_session(session_id):
 
 # --- MESSAGE LOGIC ---
 
-def save_message(session_id, username, role, content):
-    """
-    Inserts a new message (either from User or AI) into the history table.
-    """
+def save_message(session_id, user_email, role, content):
+    """Inserts a new message into the history table."""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("INSERT INTO chat_history (session_id, username, role, content) VALUES (?, ?, ?, ?)", 
-              (session_id, username, role, content))
+    c.execute("""
+        INSERT INTO chat_history (session_id, user_email, role, content) 
+        VALUES (?, ?, ?, ?)
+    """, (session_id, user_email, role, content))
     conn.commit()
     conn.close()
 
 def get_chat_history(session_id):
-    """
-    Fetches all messages for a specific session to display them in the chat window.
-    Ordered by timestamp so the conversation flows naturally.
-    """
+    """Fetches all messages for a specific session."""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT role, content FROM chat_history WHERE session_id = ? ORDER BY timestamp ASC", (session_id,))
-    # Format as list of dicts for Streamlit's st.chat_message
+    c.execute("""
+        SELECT role, content FROM chat_history 
+        WHERE session_id = ? ORDER BY timestamp ASC
+    """, (session_id,))
     history = [{"role": row[0], "content": row[1]} for row in c.fetchall()]
     conn.close()
     return history
 
-def clear_chat_history(username):
-    """
-    Wipes all chat records for a user. Used for the 'Clear All' functionality.
-    """
+def clear_chat_history(user_email):
+    """Wipes all records for a user."""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("DELETE FROM chat_history WHERE username = ?", (username,))
+    # Corrected: column name updated to user_email
+    c.execute("DELETE FROM chat_history WHERE user_email = ?", (user_email,))
     conn.commit()
     conn.close()
 
 # --- AUTHENTICATION ---
-def add_user(username, password, role):
-    """
-    Registers a new user with hard-coded role security.
-    Even if 'Admin' is passed, it defaults to 'Patient'.
-    """
+
+def add_user(user_email, password, role):
+    """Registers a new user. Admins can only be created via special setup tool."""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     
-    # --- HARD SECURITY OVERRIDE ---
-    # Only allow these roles to be created via the UI. 
-    # If anything else (like 'Admin') is sent, force it to 'Patient'.
-    allowed_public_roles = ["Patient", "Staff"]
-    final_role = role if role in allowed_public_roles else "Patient"
-    
+    # Check if we are creating the very first user (Special case for Admin Setup Tool)
+    c.execute("SELECT COUNT(*) FROM users")
+    user_count = c.fetchone()[0]
+
+    # Security Guard: Only allow Admin role if it's the first ever user 
+    # OR if explicitly called through code logic.
+    allowed_roles = ["Patient", "Staff", "Admin"]
+    final_role = role if role in allowed_roles else "Patient"
+
     try:
-        # Generate a secure hash of the password
+        # Generate secure hash and decode to string for storage
         hashed_pw = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        
-        # Insert using the validated final_role
-        c.execute("INSERT INTO users VALUES (?, ?, ?)", (username, hashed_pw, final_role))
+        c.execute("INSERT INTO users (email, password, role) VALUES (?, ?, ?)", 
+                  (user_email, hashed_pw, final_role))
         conn.commit()
         return True
     except sqlite3.IntegrityError:
-        # Fails if the username already exists
         return False
     finally:
         conn.close()
 
-def verify_user(username, password):
-    """
-    Checks if the provided password matches the hashed password in the database.
-    Returns the user's role (Admin/Staff/Patient) if successful.
-    """
+def verify_user(email, password):
+    """Verifies credentials."""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT password, role FROM users WHERE username = ?", (username,))
+    c.execute("SELECT password, role FROM users WHERE email = ?", (email,))
     result = c.fetchone()
     conn.close()
-    
-    # Compare the provided password with the stored hash
-    if result and bcrypt.checkpw(password.encode('utf-8'), result[0].encode('utf-8')):
-        return result[1] # Return the role
+
+    if result:
+        hashed_pwd, role = result
+        # bcrypt.checkpw expects (bytes, bytes)
+        if bcrypt.checkpw(password.encode('utf-8'), hashed_pwd.encode('utf-8')):
+            return role
     return None
+
+def admin_exists():
+    """Checks if any Admin exists."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM users WHERE role = 'Admin' LIMIT 1")
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None
+
+def reset_user_password(user_email, new_password):
+    """Hashes new password and updates record."""
+    try:
+        # Encode to string for SQLite storage
+        hashed_pwd = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET password = ? WHERE email = ?", (hashed_pwd, user_email))
+        conn.commit()
+        updated = cursor.rowcount > 0
+        conn.close()
+        return updated
+    except Exception as e:
+        print(f"Database error: {e}")
+        return False

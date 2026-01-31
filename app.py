@@ -6,19 +6,17 @@ from database import *
 from ingest import process_pdf
 from rag_pipeline import build_qa_chain, role_based_query
 from style import apply_custom_css
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # --- INITIALIZATION ---
-# Initialize the SQLite database tables
 init_db()
 
-# Configure Streamlit page settings
 st.set_page_config(page_title="Hospital AI Portal", page_icon="🏥", layout="wide")
-
-# Apply custom CSS from style.py (handles colors, sidebar text contrast, and hero sections)
 apply_custom_css()
 
 # --- STATE MANAGEMENT ---
-# These variables persist across user interactions (button clicks, inputs)
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "page" not in st.session_state:
@@ -28,13 +26,11 @@ if "current_session" not in st.session_state:
 
 # --- HELPERS ---
 def is_valid_email(email):
-    """Regex helper to ensure registration emails are formatted correctly."""
     return re.match(r"[^@]+@[^@]+\.[^@]+", email)
 
 # --- UI PAGES ---
 
 def landing_page():
-    """Renders the initial welcome screen with feature cards."""
     st.markdown("""
         <div class='hero-section'>
             <h1>🏥 Hospital Intelligence Portal</h1>
@@ -44,14 +40,10 @@ def landing_page():
         </div>
     """, unsafe_allow_html=True)
     
-    # Feature highlights using Streamlit info boxes
     col1, col2, col3 = st.columns(3)
-    with col1:
-        st.info("### 🛡️ Secure\nRole-based access controls for data privacy.")
-    with col2:
-        st.info("### ⚡ Fast\nInstant answers from hospital policy PDFs.")
-    with col3:
-        st.info("### 📚 Verified\nEvery answer is backed by official documentation.")
+    with col1: st.info("### 🛡️ Secure\nRole-based access controls.")
+    with col2: st.info("### ⚡ Fast\nInstant policy retrieval.")
+    with col3: st.info("### 📚 Verified\nOfficial documentation only.")
 
     st.divider()
     _, center_col, _ = st.columns([1, 1, 1])
@@ -61,7 +53,6 @@ def landing_page():
             st.rerun()
 
 def auth_page():
-    """Handles User Login and Registration logic."""
     st.markdown("<h2 style='text-align: center;'>Portal Authentication</h2>", unsafe_allow_html=True)
     _, col, _ = st.columns([1, 1.5, 1])
     
@@ -71,6 +62,7 @@ def auth_page():
         with tab_login:
             email = st.text_input("Username/Email", key="l_email")
             pwd = st.text_input("Password", type="password", key="l_pwd")
+            
             if st.button("Login", use_container_width=True):
                 if not email or not pwd:
                     st.warning("⚠️ Please fill in all fields.")
@@ -78,12 +70,11 @@ def auth_page():
                     with st.spinner("Authenticating..."):
                         role = verify_user(email, pwd)
                         if role:
-                            # Set session state variables upon successful auth
                             st.session_state.logged_in = True
                             st.session_state.user_role = role
                             st.session_state.username = email
                             
-                            # Load previous session history or start a fresh one
+                            # Fetch or create session
                             sessions = get_user_sessions(email)
                             st.session_state.current_session = sessions[0] if sessions else create_new_session(email)
                             
@@ -93,72 +84,72 @@ def auth_page():
                         else:
                             st.error("❌ Invalid credentials.")
 
+            with st.expander("Forgot Password?"):
+                r_email = st.text_input("Registered Email", key="r_email")
+                r_pwd = st.text_input("New Password", type="password", key="r_pwd")
+                if st.button("Reset Password", use_container_width=True):
+                    if r_email and r_pwd:
+                        if len(r_pwd) < 6:
+                            st.error("❌ Minimum 6 characters required.")
+                        elif reset_user_password(r_email, r_pwd):
+                            st.success("✅ Password updated!")
+                        else:
+                            st.error("❌ Email not found.")
+
         with tab_signup:
             new_email = st.text_input("Email", key="s_email")
             new_pwd = st.text_input("Password", type="password", key="s_pwd")
-            
-            # Remove 'Admin' from this list
             new_role = st.selectbox("Request Role", ["Patient", "Staff"]) 
             
-            st.caption("Note: Admin accounts must be provisioned by the IT department.")
             if st.button("Register Account", use_container_width=True):
                 if not new_email or not new_pwd:
-                    st.warning("⚠️ All fields are required.")
+                    st.warning("⚠️ All fields required.")
                 elif not is_valid_email(new_email):
-                    st.error("❌ Please enter a valid email address.")
+                    st.error("❌ Invalid email.")
                 elif len(new_pwd) < 6:
-                    st.error("❌ Password must be at least 6 characters.")
+                    st.error("❌ Password too short.")
                 else:
+                    # Pass new_email to add_user (matches user_email in database.py)
                     if add_user(new_email, new_pwd, new_role):
-                        st.success("🎉 Account Created! Please switch to Login tab.")
-                        st.toast("Registration Successful!")
+                        st.success("🎉 Created! Switch to Login tab.")
                     else:
                         st.error("❌ User already exists.")
         
-        if st.button("← Back to Home"):
+        st.divider()
+        if st.button("← Back to Home", use_container_width=True):
             st.session_state.page = "landing"
             st.rerun()
 
-# --- TEMPORARY ADMIN SETUP TOOL ---
-# Access via: your-app-url/?setup=secretadmin123
+# --- ADMIN SETUP TOOL ---
+SETUP_KEY = os.getenv("ADMIN_SETUP_KEY")
+
 def admin_setup_tool():
-    # 1. Check if the secret key is in the URL
-    is_setup_mode = st.query_params.get("setup") == "secretadmin123"
-    
-    if is_setup_mode:
-        # 2. Safety Check: Only show if NO admin exists in PostgreSQL
-        admin_exists = conn.query("SELECT 1 FROM users WHERE role = 'Admin' LIMIT 1", ttl=0)
-        
-        if admin_exists.empty:
+    if SETUP_KEY and st.query_params.get("setup") == SETUP_KEY:
+        if not admin_exists():
             st.warning("🛠️ Admin Setup Mode Active")
-            with st.expander("Create Initial Admin Account"):
+            with st.expander("Create Initial Admin Account", expanded=True):
                 adm_email = st.text_input("Admin Email")
                 adm_pwd = st.text_input("Admin Password", type="password")
                 if st.button("Generate System Admin"):
-                    if add_user(adm_email, adm_pwd, "Admin"):
-                        st.success("Admin created! Refreshing...")
-                        # Clear params to hide the tool immediately
-                        st.query_params.clear()
-                        st.rerun()
+                    if adm_email and adm_pwd:
+                        if add_user(adm_email, adm_pwd, "Admin"):
+                            st.success("Admin created!")
+                            st.query_params.clear()
+                            st.rerun()
         else:
-            # If an admin exists, hide the tool and clear the URL
             st.query_params.clear()
 
-# Call the tool in your app
 admin_setup_tool()
 
 def main_app():
-    """The core Chat interface, Sidebar management, and Admin tools."""
     role = st.session_state.user_role
     user = st.session_state.username
     
-    # --- SIDEBAR: Profile, History, and Admin ---
     with st.sidebar:
         st.markdown(f"### 👤 {user}")
         st.caption(f"Access Level: {role}")
         st.divider()
         
-        # New Chat: Generates a unique ID and clears the current chat view
         if st.button("➕ New Chat", use_container_width=True, type="primary"):
             st.session_state.current_session = create_new_session(user)
             st.rerun()
@@ -166,34 +157,28 @@ def main_app():
         st.write("📂 **Recent Chats**")
         sessions = get_user_sessions(user)
         
-        # Display list of past sessions with selection and deletion capability
         for s_id in sessions:
             cols = st.columns([0.8, 0.2])
             is_active = "▶️ " if s_id == st.session_state.current_session else "💬 "
-            
-            # Button to switch between chat threads
             if cols[0].button(f"{is_active}{s_id}", key=f"btn_{s_id}", use_container_width=True):
                 st.session_state.current_session = s_id
                 st.rerun()
             
-            # Individual session delete button
-            if cols[1].button("🗑️", key=f"del_{s_id}", help="Delete this chat"):
+            if cols[1].button("🗑️", key=f"del_{s_id}"):
                 delete_session(s_id)
+                # Corrected logic to reset current session if deleted
                 if st.session_state.current_session == s_id:
                     remaining = get_user_sessions(user)
                     st.session_state.current_session = remaining[0] if remaining else create_new_session(user)
                 st.rerun()
 
-        # Global delete for user history
         if sessions:
             st.divider()
             if st.button("🧨 Clear All History", use_container_width=True):
-                clear_chat_history(user)
+                clear_chat_history(user) # Corrected: matches user_email in database.py
                 st.session_state.current_session = create_new_session(user)
-                st.toast("All history cleared!")
                 st.rerun()
 
-        # Admin Only: PDF Upload and Ingestion logic
         if role == "Admin":
             st.divider()
             st.subheader("⚙️ Admin: Indexing")
@@ -203,52 +188,39 @@ def main_app():
                     path = os.path.join("data", file.name)
                     if not os.path.exists("data"): os.makedirs("data")
                     with open(path, "wb") as f: f.write(file.getbuffer())
-                    process_pdf(path) # Process PDF into JSON chunks
-                    st.cache_resource.clear() # Clear AI model cache to recognize new data
+                    process_pdf(path)
+                    st.cache_resource.clear()
                     status.update(label="Index Complete!", state="complete")
-                st.toast("Knowledge Base Updated!")
 
         st.divider()
         if st.button("🚪 Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.page = "landing"
-            st.session_state.current_session = None
             st.rerun()
 
-    # --- MAIN CHAT INTERFACE ---
+    # --- MAIN CHAT ---
     st.title(f"🩺 Knowledge Assistant")
     st.caption(f"Active Session: {st.session_state.current_session}")
     
-    # Initialize the AI Chain (Load documents -> Embeddings -> LLM)
     qa_chain = build_qa_chain()
-
-    # Retrieve and display message history for the selected session
     history = get_chat_history(st.session_state.current_session)
     for msg in history:
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
 
-    # Chat Input: Capture user question and generate AI response
-    if query := st.chat_input("Ask a question about hospital records..."):
+    if query := st.chat_input("Ask a question..."):
         with st.chat_message("user"):
             st.write(query)
-        
-        # Save user message to database immediately
         save_message(st.session_state.current_session, user, "user", query)
- 
+
         with st.chat_message("assistant"):
             with st.spinner("Analyzing documents..."):
-                # Execute AI query with role-based security prompts
                 res = role_based_query(qa_chain, query, role)
                 ans = res["result"]
                 st.write(ans)
-                # Save assistant response to database
                 save_message(st.session_state.current_session, user, "assistant", ans)
-                # Rerun to update the sidebar history list
                 st.rerun()
 
-# --- ROUTER ---
-# Determines which page to show based on login status
 if st.session_state.logged_in:
     main_app()
 elif st.session_state.page == "auth":

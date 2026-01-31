@@ -51,6 +51,25 @@ This project demonstrates **secure, production-aware AI engineering** with a foc
 
 ---
 
+## 🔐 Secure Password Recovery (OTP)
+
+The portal includes a multi-step password reset flow to ensure account security:
+
+1. **Email Verification:** Users enter their registered email address.
+2. **OTP Generation:** The system generates a cryptographically secure 6-digit One-Time Password.
+3. **SMTP Integration:** The OTP is sent via Gmail's SMTP server using SSL encryption (Port 465).
+4. **Rate Limiting:** A **60-second cooldown timer** is enforced to prevent SMTP spamming and brute-force attempts.
+5. **Session Locking:** The reset process is locked to the verified email to prevent cross-account hijacking.
+
+### 📧 Setting up the OTP Mailer
+To enable the "Reset Password" button, ensure your `.env` is configured:
+- `EMAIL_USER`: Your Gmail address.
+- `EMAIL_PASS`: A 16-character **Google App Password**.
+
+### 🎨 Visualizing the flow
+User → Requests Reset → System → Sends Email → User → Enters OTP → System → Updates Hashed Password.
+
+---
 ## 📂 Project Structure
 
 ```text

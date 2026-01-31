@@ -162,3 +162,13 @@ def reset_user_password(user_email, new_password):
     except Exception as e:
         print(f"Database error: {e}")
         return False
+
+# To check wether the user exist or not
+def user_exists(email):
+    """Checks if an email is registered in the system."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM users WHERE email = ?", (email,))
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None

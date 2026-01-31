@@ -7,6 +7,8 @@ from ingest import process_pdf
 from rag_pipeline import build_qa_chain, role_based_query
 from style import apply_custom_css
 from dotenv import load_dotenv
+import random # Ensure this is at the top of your app.py
+from mailer import send_otp_email # Ensure mailer.py exists with your SMTP logic
 
 load_dotenv()
 
@@ -52,13 +54,20 @@ def landing_page():
             st.session_state.page = "auth"
             st.rerun()
 
+import time
+import random
+import streamlit as st
+from mailer import send_otp_email
+
 def auth_page():
+    """Handles User Login, Registration, and Secure OTP Password Reset with Rate Limiting."""
     st.markdown("<h2 style='text-align: center;'>Portal Authentication</h2>", unsafe_allow_html=True)
     _, col, _ = st.columns([1, 1.5, 1])
     
     with col:
         tab_login, tab_signup = st.tabs(["Login", "Create Account"])
         
+        # --- LOGIN TAB ---
         with tab_login:
             email = st.text_input("Username/Email", key="l_email")
             pwd = st.text_input("Password", type="password", key="l_pwd")
@@ -74,7 +83,6 @@ def auth_page():
                             st.session_state.user_role = role
                             st.session_state.username = email
                             
-                            # Fetch or create session
                             sessions = get_user_sessions(email)
                             st.session_state.current_session = sessions[0] if sessions else create_new_session(email)
                             
@@ -84,18 +92,87 @@ def auth_page():
                         else:
                             st.error("❌ Invalid credentials.")
 
+            # --- SECURE OTP PASSWORD RESET WITH TIMER ---
             with st.expander("Forgot Password?"):
-                r_email = st.text_input("Registered Email", key="r_email")
-                r_pwd = st.text_input("New Password", type="password", key="r_pwd")
-                if st.button("Reset Password", use_container_width=True):
-                    if r_email and r_pwd:
-                        if len(r_pwd) < 6:
-                            st.error("❌ Minimum 6 characters required.")
-                        elif reset_user_password(r_email, r_pwd):
-                            st.success("✅ Password updated!")
-                        else:
-                            st.error("❌ Email not found.")
+                # Initialize session states
+                if "otp_sent" not in st.session_state: st.session_state.otp_sent = False
+                if "generated_otp" not in st.session_state: st.session_state.generated_otp = None
+                if "reset_target_email" not in st.session_state: st.session_state.reset_target_email = None
+                if "last_otp_time" not in st.session_state: st.session_state.last_otp_time = 0
+                
+                cooldown = 60  # Cooldown period in seconds
 
+                # STEP 1: Request Email & Send OTP
+                if not st.session_state.otp_sent:
+                    st.caption("Step 1: Verify your registered email.")
+                    email_to_verify = st.text_input("Enter Email", key="otp_email")
+                    
+                    elapsed = time.time() - st.session_state.last_otp_time
+                    wait_time = int(cooldown - elapsed)
+
+                    if wait_time > 0:
+                        st.button(f"⏳ Resend Code in {wait_time}s", disabled=True, use_container_width=True)
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        if st.button("Send Verification Code", use_container_width=True):
+                            if user_exists(email_to_verify):
+                                otp = random.randint(100000, 999999)
+                                with st.spinner("Sending email..."):
+                                    if send_otp_email(email_to_verify, otp):
+                                        st.session_state.generated_otp = otp
+                                        st.session_state.reset_target_email = email_to_verify
+                                        st.session_state.otp_sent = True
+                                        st.session_state.last_otp_time = time.time()
+                                        st.success(f"📩 Code sent to {email_to_verify}!")
+                                        st.rerun()
+                                    else:
+                                        st.error("Failed to send email. Check .env settings.")
+                            else:
+                                st.error("❌ This email is not registered.")
+
+                # STEP 2: Verify OTP & Update Password
+                else:
+                    st.caption(f"Step 2: Enter the code sent to {st.session_state.reset_target_email}")
+                    user_otp = st.text_input("Enter 6-Digit Code", key="user_otp")
+                    new_reset_pwd = st.text_input("New Password", type="password", key="new_reset_pwd")
+                    
+                    c1, c2 = st.columns(2)
+                    if c1.button("Verify & Reset", use_container_width=True):
+                        if str(user_otp) == str(st.session_state.generated_otp):
+                            if len(new_reset_pwd) >= 6:
+                                if reset_user_password(st.session_state.reset_target_email, new_reset_pwd):
+                                    st.success("✅ Password reset! Please login.")
+                                    st.session_state.otp_sent = False 
+                                    st.session_state.generated_otp = None
+                                else:
+                                    st.error("Database update failed.")
+                            else:
+                                st.error("Password must be at least 6 characters.")
+                        else:
+                            st.error("❌ Invalid verification code.")
+                    
+                    if c2.button("Cancel", use_container_width=True):
+                        st.session_state.otp_sent = False
+                        st.rerun()
+
+                    # RESEND LOGIC INSIDE STEP 2
+                    st.divider()
+                    elapsed_step2 = time.time() - st.session_state.last_otp_time
+                    wait_step2 = int(cooldown - elapsed_step2)
+
+                    if wait_step2 > 0:
+                        st.caption(f"Didn't get the code? You can resend in {wait_step2} seconds.")
+                    else:
+                        if st.button("📩 Resend Verification Code", key="resend_inner", use_container_width=True):
+                            otp = random.randint(100000, 999999)
+                            if send_otp_email(st.session_state.reset_target_email, otp):
+                                st.session_state.generated_otp = otp
+                                st.session_state.last_otp_time = time.time()
+                                st.toast("New code sent!", icon="📧")
+                                st.rerun()
+
+        # --- SIGNUP TAB ---
         with tab_signup:
             new_email = st.text_input("Email", key="s_email")
             new_pwd = st.text_input("Password", type="password", key="s_pwd")
@@ -107,11 +184,10 @@ def auth_page():
                 elif not is_valid_email(new_email):
                     st.error("❌ Invalid email.")
                 elif len(new_pwd) < 6:
-                    st.error("❌ Password too short.")
+                    st.error("❌ Password must be at least 6 characters.")
                 else:
-                    # Pass new_email to add_user (matches user_email in database.py)
                     if add_user(new_email, new_pwd, new_role):
-                        st.success("🎉 Created! Switch to Login tab.")
+                        st.success("🎉 Account Created! Please switch to Login tab.")
                     else:
                         st.error("❌ User already exists.")
         
@@ -119,7 +195,6 @@ def auth_page():
         if st.button("← Back to Home", use_container_width=True):
             st.session_state.page = "landing"
             st.rerun()
-
 # --- ADMIN SETUP TOOL ---
 SETUP_KEY = os.getenv("ADMIN_SETUP_KEY")
 
